@@ -18,7 +18,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 """
 
-__version__ = "0.3"
+__version__ = "0.4"
 
 import time
 import serial
@@ -43,11 +43,42 @@ LOW = 0
 HIGH = 1
 MAX_DATA_BYTES = 32
 
-class Arduino:
-    
-    def __init__(self, port, baudrate=115200):
+import binascii
 
-        self.serial = serial.Serial(port, baudrate, bytesize=8, timeout=2)
+class MySerial(serial.Serial):
+    def __init__(self, *args, **kwds):        
+        self.debug = kwds.pop('debug', None)
+        serial.Serial.__init__(self,*args, **kwds)
+
+    def write(self, data):
+        #receive = array.array('B')
+        if self.debug:
+            self.debug(" write: %s " % str(binascii.b2a_hex(data)))
+            #self.debug("write: %s\n" % str(data.decode()))
+        ret = serial.Serial.write(self, data)
+        if self.debug:
+            if ret:
+                self.debug("(ok)\n")
+            else:
+                self.debug("(%s)\n" % str(ret))
+        return ret
+
+    def read(self, size=1):
+        if self.debug:
+            self.debug(" read %d: " % size)
+        data = serial.Serial.read(self, size)
+        if self.debug:
+            self.debug(" %s\n" % str(binascii.b2a_hex(data)))
+        return data
+
+
+class Exarduino:
+    
+    def __init__(self, port, baudrate=57600, debug=False):
+
+        self.debug = debug
+        self.serial = serial.Serial(port, baudrate, bytesize=8, timeout=0.5)
+        #self.serial = MySerial(port, baudrate, bytesize=8, timeout=0.5, debug=debug)
         
         self.wait_for_data = 0
         self.exec_multibyte_cmd = 0
@@ -63,6 +94,9 @@ class Arduino:
         self.minor_version = 0
         self.__report()
         
+    def close(self):
+        self.serial.close()
+
     def __str__(self):
         return "Arduino: %s" % self.serial.port
 
@@ -79,6 +113,8 @@ class Arduino:
     def digital_write(self, pin, value):
         """Writing to a digital pin"""
         
+        if self.debug:
+            self.debug("DIGITAL WRITE: pin=%d, value=%x\n" % (pin,value))
         port_number = (pin >> 3) & 0x0F
         
         if value == 0:
