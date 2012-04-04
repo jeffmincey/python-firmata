@@ -33,6 +33,10 @@ SYSTEM_RESET = 0xFF # reset from MIDI
 START_SYSEX = 0xF0 # start a MIDI SysEx message
 END_SYSEX = 0xF7 # end a MIDI SysEx message
 
+# extended command set using sysex (0-127/0x00-0x7F)
+# 0x00-0x0F reserved for user-defined commands
+STRING_DATA = 0x71 # a string message with 14-bits per char
+
 # pin modes
 INPUT = 0
 OUTPUT = 1
@@ -135,6 +139,18 @@ class Exarduino:
         self.serial.write(chr(ANALOG_MESSAGE | (pin & 0x0F)))
         self.serial.write(chr(value & 0x7F))
         self.serial.write(chr(value >> 7))
+
+    def send_sysex(self, command, data):
+        """Sending data to device via sysex"""
+        self._start_sysex()
+        self.serial.write(chr(command))
+        for byte in data:
+            self._send_value_as_two_7_bit(byte)
+        self._end_sysex()
+
+    def send_string(self, string):
+        """Sending a string to device"""
+        self.send_sysex(STRING_DATA, string)
     
     def set_version(self, major, minor):
         """Setting a minor and major version"""
@@ -201,3 +217,15 @@ class Exarduino:
         for port in range(2):
             self.serial.write(chr(REPORT_DIGITAL | port))
             self.serial.write(chr(1))
+
+    def _send_value_as_two_7_bit(self, value):
+        if isinstance(value, str):
+            value = ord(value)
+        self.serial.write(chr(value & 0b01111111)) # LSB
+        self.serial.write(chr(value >> 7 & 0b01111111)) # MSB
+
+    def _start_sysex(self):
+        self.serial.write(chr(START_SYSEX))
+
+    def _end_sysex(self):
+        self.serial.write(chr(END_SYSEX))
